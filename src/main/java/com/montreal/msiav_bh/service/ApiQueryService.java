@@ -5,6 +5,7 @@ import com.montreal.msiav_bh.dto.request.ConsultaAuthRequestDTO;
 import com.montreal.msiav_bh.dto.request.ConsultaSearchRequestDTO;
 import com.montreal.msiav_bh.dto.response.ConsultaAuthResponseDTO;
 import com.montreal.msiav_bh.dto.response.ConsultaNotificationResponseDTO;
+import com.montreal.msiav_bh.dto.response.QueryDetailResponseDTO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,7 +16,9 @@ import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.locks.ReentrantLock;
 
 @Service
@@ -102,41 +105,26 @@ public class ApiQueryService {
         return List.of();
     }
 
-    public List<ConsultaNotificationResponseDTO.NotificationData> searchNotifications(ConsultaSearchRequestDTO searchRequest) {
-        String token = authenticate();
+    public QueryDetailResponseDTO searchContract(String contractNumber) {
         String url = config.getBaseUrl() + "/api/recepcaoContrato/receber";
+        String token = authenticate();
+
+        Map<String, String> body = new HashMap<>();
+        body.put("nu_contrato", contractNumber);
+
 
         HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setBearerAuth(token);
-        HttpEntity<ConsultaSearchRequestDTO> entity = new HttpEntity<>(searchRequest, headers);
+        headers.setContentType(MediaType.APPLICATION_JSON);
 
-        try {
-            ResponseEntity<ConsultaNotificationResponseDTO> response = restTemplate.postForEntity(
-                    url, entity, ConsultaNotificationResponseDTO.class);
 
-            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
-                if (Boolean.TRUE.equals(response.getBody().success())) {
-                    return response.getBody().data();
-                } else {
-                    logger.error("API Montreal retornou erro: {}",
-                            response.getBody().message() != null ?
-                                    response.getBody().message() : "Sem mensagem de erro");
-                    return List.of();
-                }
-            }
-            return List.of();
-        } catch (HttpClientErrorException e) {
-            if (e.getStatusCode() == HttpStatus.UNAUTHORIZED) {
-                currentToken = null;
-                return searchNotifications(searchRequest);
-            }
-            logger.error("Erro na requisição: {} - {}", e.getStatusCode(), e.getResponseBodyAsString());
-            throw new RuntimeException("Falha na busca: " + e.getResponseBodyAsString());
-        } catch (Exception e) {
-            logger.error("Erro inesperado: ", e);
-            throw new RuntimeException("Erro na busca: " + e.getMessage());
-        }
+        HttpEntity<Map<String, String>> requestEntity = new HttpEntity<>(body, headers);
+
+
+        ResponseEntity<QueryDetailResponseDTO> response =
+                restTemplate.postForEntity(url, requestEntity, QueryDetailResponseDTO.class);
+
+        return response.getBody();
     }
 
     public List<ConsultaNotificationResponseDTO.NotificationData> searchCancelledByPeriod(LocalDate startDate, LocalDate endDate) {

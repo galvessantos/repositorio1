@@ -10,9 +10,11 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.ArrayList;
 
 @Component
 public class VehicleInquiryMapper {
@@ -24,23 +26,32 @@ public class VehicleInquiryMapper {
             return Collections.emptyList();
         }
 
-        List<VehicleDTO> veiculos = new ArrayList<>();
+        Map<String, VehicleDTO> veiculosMap = new LinkedHashMap<>();
 
-        for (var notification : notifications) {
+        for (ConsultaNotificationResponseDTO.NotificationData notification : notifications) {
             if (notification == null) continue;
 
             if (notification.veiculos() != null && !notification.veiculos().isEmpty()) {
-                for (var veiculo : notification.veiculos()) {
-                    var dto = createVeiculoDTOWithVehicleInfo(notification, veiculo);
-                    if (dto != null) veiculos.add(dto);
+                for (ConsultaNotificationResponseDTO.VeiculoInfo veiculo : notification.veiculos()) {
+                    VehicleDTO dto = createVeiculoDTOWithVehicleInfo(notification, veiculo);
+                    if (dto != null && dto.placa() != null) {
+                        veiculosMap.merge(dto.placa(), dto, (existing, novo) -> {
+                            if (novo.ultimaMovimentacao() != null && existing.ultimaMovimentacao() != null) {
+                                return novo.ultimaMovimentacao().isAfter(existing.ultimaMovimentacao()) ? novo : existing;
+                            }
+                            return novo;
+                        });
+                    }
                 }
             } else {
-                var dto = createVeiculoDTOFromNotification(notification);
-                if (dto != null) veiculos.add(dto);
+                VehicleDTO dto = createVeiculoDTOFromNotification(notification);
+                if (dto != null && dto.placa() != null) {
+                    veiculosMap.putIfAbsent(dto.placa(), dto);
+                }
             }
         }
 
-        return veiculos;
+        return new ArrayList<>(veiculosMap.values());
     }
 
     private VehicleDTO createVeiculoDTOFromNotification(ConsultaNotificationResponseDTO.NotificationData notification) {

@@ -53,7 +53,7 @@ public record ConsultaNotificationResponseDTO(
             @JsonProperty("cpf_cnpj") String cpfCnpj,
             @JsonProperty("enderecos") List<EnderecoInfo> enderecos,
             @JsonProperty("contatos_email") List<EmailInfo> contatosEmail,
-            @JsonProperty("contato_telefones") List<TelefoneInfo> contatoTelefones
+            @JsonProperty("contatos_telefones") List<TelefoneInfo> contatoTelefones
     ) {}
 
     public record GarantidorInfo(

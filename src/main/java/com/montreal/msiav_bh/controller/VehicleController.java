@@ -2,25 +2,20 @@ package com.montreal.msiav_bh.controller;
 
 import com.montreal.msiav_bh.dto.PageDTO;
 import com.montreal.msiav_bh.dto.VehicleDTO;
-
-import com.montreal.msiav_bh.service.ApiQueryService;
-import com.montreal.msiav_bh.service.VehicleService;
+import com.montreal.msiav_bh.dto.response.QueryDetailResponseDTO;
+import com.montreal.msiav_bh.service.VehicleApiService;
+import com.montreal.msiav_bh.service.VehicleCacheService;
 import com.montreal.msiav_bh.utils.exceptions.ValidationMessages;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
 import java.util.Map;
@@ -35,13 +30,9 @@ import java.util.Map;
         @ApiResponse(responseCode = "404", description = "Recurso não encontrado")
 })
 public class VehicleController {
-    private static final Logger logger = LoggerFactory.getLogger(VehicleController.class);
 
-    @Autowired
-    private VehicleService vehicleService;
-
-    @Autowired
-    private ApiQueryService apiQueryService;
+    private final VehicleApiService vehicleApiService;
+    private final VehicleCacheService vehicleCacheService;
 
     @GetMapping
     public ResponseEntity<?> buscarVeiculos(
@@ -60,49 +51,62 @@ public class VehicleController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "25") int size,
             @RequestParam(defaultValue = "protocolo") String sortBy,
-            @RequestParam(defaultValue = "asc") String sortDir) {
-
-        // Define valores padrão se não forem passados na requisição
+            @RequestParam(defaultValue = "asc") String sortDir
+    ) {
         if (dataInicio == null && dataFim == null) {
             dataInicio = LocalDate.of(2025, 3, 20);
             dataFim = LocalDate.of(2025, 7, 20);
         }
-
         if (dataInicio != null && dataFim != null && dataFim.isBefore(dataInicio)) {
             return ResponseEntity.badRequest().body(Map.of("error", ValidationMessages.DATA_FIM_ANTERIOR_INICIO));
         }
-
         if (dataInicio != null && dataFim == null) {
             return ResponseEntity.badRequest().body(Map.of("error", ValidationMessages.DATA_FIM_OBRIGATORIA));
         }
-
         if (dataFim != null && dataInicio == null) {
             return ResponseEntity.badRequest().body(Map.of("error", ValidationMessages.DATA_INICIO_OBRIGATORIA));
         }
 
         try {
-            PageDTO<VehicleDTO> resultado = vehicleService.buscarComFiltros(
+            PageDTO<VehicleDTO> resultado = vehicleApiService.getVehiclesWithFallback(
                     dataInicio, dataFim, credor, contrato, protocolo, cpf, uf, cidade,
                     modelo, placa, etapaAtual, statusApreensao, page, size, sortBy, sortDir
             );
             return ResponseEntity.ok(resultado);
-        } catch (IllegalArgumentException e) {
-            logger.error("Erro de validação: {}", e.getMessage());
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         } catch (Exception e) {
-            logger.error("Erro na busca: {}", e.getMessage());
             return ResponseEntity.internalServerError().body(Map.of("error", "Erro ao processar requisição"));
         }
     }
 
+    @GetMapping("/contract")
+    public ResponseEntity<?> getDados(@RequestParam String contrato) {
+        QueryDetailResponseDTO resposta = vehicleApiService.searchContract(contrato);
+        return ResponseEntity.ok(resposta);
+    }
 
     @GetMapping("/health")
     public ResponseEntity<String> healthCheck() {
+        return ResponseEntity.ok("API operacional");
+    }
+
+    @Operation(summary = "Force cache update")
+    @PostMapping("/cache/refresh")
+    public ResponseEntity<Map<String, String>> forceRefreshCache() {
         try {
-            vehicleService.healthCheck();
-            return ResponseEntity.ok("API operacional");
+            vehicleCacheService.invalidateCache();
+            return ResponseEntity.ok(Map.of("message", "Atualização do cache iniciada"));
         } catch (Exception e) {
-            return ResponseEntity.status(503).body("Falha na conexão com a API externa");
+            return ResponseEntity.internalServerError().body(Map.of("error", "Falha ao atualizar o cache"));
         }
+    }
+
+    @Operation(summary = "Get cache status")
+    @GetMapping("/cache/status")
+    public ResponseEntity<Map<String, Object>> getCacheStatus() {
+        boolean isValid = vehicleCacheService.isCacheValid();
+        return ResponseEntity.ok(Map.of(
+                "cacheValid", isValid,
+                "message", isValid ? "Cache está atualizado" : "Cache está desatualizado ou vazio"
+        ));
     }
 }
