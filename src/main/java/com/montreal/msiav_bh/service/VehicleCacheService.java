@@ -69,7 +69,7 @@ public class VehicleCacheService {
 
         log.info("Retrieving vehicles from cache");
 
-        Page<VehicleCache> cachedVehicles = vehicleCacheRepository.findWithFilters(
+        Page<VehicleCache> cachedVehicles = vehicleCacheRepository.findWithFiltersFixed(
                 dataInicio, dataFim, credor, contrato, protocolo, cpf,
                 uf, cidade, modelo, placa, etapaAtual, statusApreensao, pageable
         );

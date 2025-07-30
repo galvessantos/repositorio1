@@ -32,7 +32,7 @@ public class VehicleCache {
     @Column(name = "data_pedido")
     private LocalDate dataPedido;
 
-    @Column(name = "contrato", unique = true)
+    @Column(name = "contrato")
     private String contrato;
 
     @Column(name = "placa")
@@ -50,7 +50,7 @@ public class VehicleCache {
     @Column(name = "cpf_devedor")
     private String cpfDevedor;
 
-    @Column(name = "protocolo", unique = true)
+    @Column(name = "protocolo")
     private String protocolo;
 
     @Column(name = "etapa_atual")

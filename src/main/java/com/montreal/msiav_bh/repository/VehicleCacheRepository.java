@@ -34,27 +34,27 @@ public interface VehicleCacheRepository extends JpaRepository<VehicleCache, Long
     @Query("SELECT v FROM VehicleCache v WHERE " +
             "(:dataInicio IS NULL OR v.dataPedido >= :dataInicio) AND " +
             "(:dataFim IS NULL OR v.dataPedido <= :dataFim) AND " +
-            "(:credor IS NULL OR LOWER(v.credor) LIKE LOWER(CONCAT('%', :credor, '%'))) AND " +
+            "(:credor IS NULL OR UPPER(v.credor) LIKE UPPER(CONCAT('%', :credor, '%'))) AND " +
             "(:contrato IS NULL OR v.contrato = :contrato) AND " +
             "(:protocolo IS NULL OR v.protocolo = :protocolo) AND " +
             "(:cpf IS NULL OR v.cpfDevedor = :cpf) AND " +
             "(:uf IS NULL OR v.uf = :uf) AND " +
-            "(:cidade IS NULL OR LOWER(v.cidade) LIKE LOWER(CONCAT('%', :cidade, '%'))) AND " +
-            "(:modelo IS NULL OR LOWER(v.modelo) LIKE LOWER(CONCAT('%', :modelo, '%'))) AND " +
+            "(:cidade IS NULL OR UPPER(v.cidade) LIKE UPPER(CONCAT('%', :cidade, '%'))) AND " +
+            "(:modelo IS NULL OR UPPER(v.modelo) LIKE UPPER(CONCAT('%', :modelo, '%'))) AND " +
             "(:placa IS NULL OR v.placa = :placa) AND " +
             "(:etapaAtual IS NULL OR v.etapaAtual = :etapaAtual) AND " +
             "(:statusApreensao IS NULL OR v.statusApreensao = :statusApreensao)")
-    Page<VehicleCache> findWithFilters(@Param("dataInicio") LocalDate dataInicio,
-                                       @Param("dataFim") LocalDate dataFim,
-                                       @Param("credor") String credor,
-                                       @Param("contrato") String contrato,
-                                       @Param("protocolo") String protocolo,
-                                       @Param("cpf") String cpf,
-                                       @Param("uf") String uf,
-                                       @Param("cidade") String cidade,
-                                       @Param("modelo") String modelo,
-                                       @Param("placa") String placa,
-                                       @Param("etapaAtual") String etapaAtual,
-                                       @Param("statusApreensao") String statusApreensao,
-                                       Pageable pageable);
+    Page<VehicleCache> findWithFiltersFixed(@Param("dataInicio") LocalDate dataInicio,
+                                            @Param("dataFim") LocalDate dataFim,
+                                            @Param("credor") String credor,
+                                            @Param("contrato") String contrato,
+                                            @Param("protocolo") String protocolo,
+                                            @Param("cpf") String cpf,
+                                            @Param("uf") String uf,
+                                            @Param("cidade") String cidade,
+                                            @Param("modelo") String modelo,
+                                            @Param("placa") String placa,
+                                            @Param("etapaAtual") String etapaAtual,
+                                            @Param("statusApreensao") String statusApreensao,
+                                            Pageable pageable);
 }

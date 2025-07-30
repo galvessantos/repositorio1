@@ -55,17 +55,26 @@ public class VehicleApiService {
     }
 
     public PageDTO<VehicleDTO> fallbackGetVehicles(
-            LocalDate dataInicio, LocalDate dataFim, String credor, String contrato,
-            String protocolo, String cpf, String uf, String cidade, String modelo,
-            String placa, String etapaAtual, String statusApreensao,
-            int page, int size, String sortBy, String sortDir, Exception ex) {
+            LocalDate dataInicio, LocalDate dataFim,
+            String credor, String contrato,
+            String protocolo, String cpf,
+            String uf, String cidade,
+            String modelo, String placa,
+            String etapaAtual, String statusApreensao,
+            int page, int size,
+            String sortBy, String sortDir,
+            Throwable throwable) {
+
+        log.warn("API externa falhou, usando cache como fallback. Erro: {}", throwable.getMessage());
 
         Sort.Direction direction = "desc".equalsIgnoreCase(sortDir) ? Sort.Direction.DESC : Sort.Direction.ASC;
-        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, sortBy));
+        Pageable pageable = PageRequest.of(page, size, Sort.by(direction, "id"));
+
         Page<VehicleDTO> cached = vehicleCacheService.getFromCache(
                 dataInicio, dataFim, credor, contrato, protocolo, cpf,
                 uf, cidade, modelo, placa, etapaAtual, statusApreensao, pageable
         );
+
         return PageDTO.of(
                 cached.getContent(),
                 cached.getNumber(),
