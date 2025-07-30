@@ -31,19 +31,20 @@ public interface VehicleCacheRepository extends JpaRepository<VehicleCache, Long
     @Query("DELETE FROM VehicleCache v WHERE v.apiSyncDate < :cutoffDate")
     void deleteOldCacheEntries(@Param("cutoffDate") LocalDateTime cutoffDate);
 
-    @Query("SELECT v FROM VehicleCache v WHERE " +
-            "(:dataInicio IS NULL OR v.dataPedido >= :dataInicio) AND " +
-            "(:dataFim IS NULL OR v.dataPedido <= :dataFim) AND " +
-            "(:credor IS NULL OR UPPER(v.credor) LIKE UPPER(CONCAT('%', :credor, '%'))) AND " +
-            "(:contrato IS NULL OR v.contrato = :contrato) AND " +
-            "(:protocolo IS NULL OR v.protocolo = :protocolo) AND " +
-            "(:cpf IS NULL OR v.cpfDevedor = :cpf) AND " +
-            "(:uf IS NULL OR v.uf = :uf) AND " +
-            "(:cidade IS NULL OR UPPER(v.cidade) LIKE UPPER(CONCAT('%', :cidade, '%'))) AND " +
-            "(:modelo IS NULL OR UPPER(v.modelo) LIKE UPPER(CONCAT('%', :modelo, '%'))) AND " +
-            "(:placa IS NULL OR v.placa = :placa) AND " +
-            "(:etapaAtual IS NULL OR v.etapaAtual = :etapaAtual) AND " +
-            "(:statusApreensao IS NULL OR v.statusApreensao = :statusApreensao)")
+    @Query(value = "SELECT * FROM vehicle_cache v " +
+            "WHERE (CAST(:dataInicio AS DATE) IS NULL OR v.data_pedido >= CAST(:dataInicio AS DATE)) " +
+            "AND (CAST(:dataFim AS DATE) IS NULL OR v.data_pedido <= CAST(:dataFim AS DATE)) " +
+            "AND (CAST(:credor AS VARCHAR) IS NULL OR UPPER(v.credor) LIKE UPPER(CONCAT('%', CAST(:credor AS VARCHAR), '%'))) " +
+            "AND (CAST(:contrato AS VARCHAR) IS NULL OR v.contrato = CAST(:contrato AS VARCHAR)) " +
+            "AND (CAST(:protocolo AS VARCHAR) IS NULL OR v.protocolo = CAST(:protocolo AS VARCHAR)) " +
+            "AND (CAST(:cpf AS VARCHAR) IS NULL OR v.cpf_devedor = CAST(:cpf AS VARCHAR)) " +
+            "AND (CAST(:uf AS VARCHAR) IS NULL OR v.uf = CAST(:uf AS VARCHAR)) " +
+            "AND (CAST(:cidade AS VARCHAR) IS NULL OR UPPER(v.cidade) LIKE UPPER(CONCAT('%', CAST(:cidade AS VARCHAR), '%'))) " +
+            "AND (CAST(:modelo AS VARCHAR) IS NULL OR UPPER(v.modelo) LIKE UPPER(CONCAT('%', CAST(:modelo AS VARCHAR), '%'))) " +
+            "AND (CAST(:placa AS VARCHAR) IS NULL OR v.placa = CAST(:placa AS VARCHAR)) " +
+            "AND (CAST(:etapaAtual AS VARCHAR) IS NULL OR v.etapa_atual = CAST(:etapaAtual AS VARCHAR)) " +
+            "AND (CAST(:statusApreensao AS VARCHAR) IS NULL OR v.status_apreensao = CAST(:statusApreensao AS VARCHAR))",
+            nativeQuery = true)
     Page<VehicleCache> findWithFiltersFixed(@Param("dataInicio") LocalDate dataInicio,
                                             @Param("dataFim") LocalDate dataFim,
                                             @Param("credor") String credor,
