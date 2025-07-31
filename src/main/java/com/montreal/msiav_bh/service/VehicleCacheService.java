@@ -1,5 +1,6 @@
 package com.montreal.msiav_bh.service;
 
+import com.montreal.msiav_bh.context.CacheUpdateContext;
 import com.montreal.msiav_bh.dto.VehicleDTO;
 import com.montreal.msiav_bh.entity.VehicleCache;
 import com.montreal.msiav_bh.mapper.VehicleCacheMapper;
@@ -15,6 +16,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -32,31 +36,122 @@ public class VehicleCacheService {
     private int cacheRetentionDays;
 
     public boolean isCacheValid() {
-        return vehicleCacheRepository.findLastSyncDate()
-                .map(lastSync -> lastSync.isAfter(LocalDateTime.now().minusMinutes(cacheExpiryMinutes)))
-                .orElse(false);
+        Optional<LocalDateTime> lastSyncOpt = vehicleCacheRepository.findLastSyncDate();
+
+        if (lastSyncOpt.isEmpty()) {
+            log.info("DEBUG: No sync date found in cache");
+            return false;
+        }
+
+        LocalDateTime lastSync = lastSyncOpt.get();
+        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(cacheExpiryMinutes);
+        boolean isValid = lastSync.isAfter(cutoff);
+
+        log.info("DEBUG: Last sync: {}, Cutoff: {}, Valid: {}", lastSync, cutoff, isValid);
+
+        return isValid;
     }
 
     @Transactional
     public void updateCache(List<VehicleDTO> vehicles) {
-        log.info("Updating vehicle cache with {} vehicles", vehicles.size());
+        CacheUpdateContext context = CacheUpdateContext.fullRefresh();
+        updateCache(vehicles, context);
+    }
+
+    @Transactional
+    public void updateCache(List<VehicleDTO> vehicles, CacheUpdateContext context) {
+        log.info("Updating vehicle cache with {} vehicles. Context: {}", vehicles.size(), context);
 
         try {
             LocalDateTime syncDate = LocalDateTime.now();
 
-            List<VehicleCache> cacheEntries = vehicles.stream()
-                    .map(dto -> vehicleCacheMapper.toEntity(dto, syncDate))
-                    .collect(Collectors.toList());
-
-            vehicleCacheRepository.saveAll(cacheEntries);
+            if (context.isFullRefresh()) {
+                handleFullRefresh(vehicles, syncDate, context);
+            } else {
+                handleIncrementalUpdate(vehicles, syncDate, context);
+            }
 
             cleanOldCache();
-
             log.info("Vehicle cache updated successfully");
         } catch (Exception e) {
             log.error("Error updating vehicle cache", e);
             throw new RuntimeException("Failed to update vehicle cache", e);
         }
+    }
+
+    private void handleFullRefresh(List<VehicleDTO> vehicles, LocalDateTime syncDate, CacheUpdateContext context) {
+        if (vehicles.isEmpty() && !context.isHasFilters()) {
+            log.warn("API returned empty without filters - clearing entire cache");
+            vehicleCacheRepository.deleteAll();
+            return;
+        }
+
+        if (vehicles.isEmpty()) {
+            log.info("API returned empty with filters - preserving existing cache");
+            return;
+        }
+
+        Set<String> activePlacas = vehicles.stream()
+                .map(VehicleDTO::placa)
+                .filter(Objects::nonNull)
+                .filter(placa -> !"N/A".equals(placa) && !placa.trim().isEmpty())
+                .collect(Collectors.toSet());
+
+        if (!activePlacas.isEmpty()) {
+            int removedCount = vehicleCacheRepository.countByPlacaNotIn(activePlacas);
+            vehicleCacheRepository.deleteByPlacaNotIn(activePlacas);
+            log.info("Removed {} vehicles no longer in API. Active placas: {}", removedCount, activePlacas.size());
+        } else {
+            log.warn("No valid placas found in API response - skipping cleanup to prevent data loss");
+        }
+
+        updateOrInsertVehicles(vehicles, syncDate);
+    }
+
+    private void handleIncrementalUpdate(List<VehicleDTO> vehicles, LocalDateTime syncDate, CacheUpdateContext context) {
+        updateOrInsertVehicles(vehicles, syncDate);
+        log.info("Incremental update completed for {} vehicles", vehicles.size());
+    }
+
+    private void updateOrInsertVehicles(List<VehicleDTO> vehicles, LocalDateTime syncDate) {
+        for (VehicleDTO dto : vehicles) {
+            Optional<VehicleCache> existing = vehicleCacheRepository.findByContrato(dto.contrato());
+
+            if (existing.isEmpty() && dto.protocolo() != null && !"N/A".equals(dto.protocolo())) {
+                existing = vehicleCacheRepository.findByProtocolo(dto.protocolo());
+            }
+
+            if (existing.isEmpty() && dto.placa() != null && !"N/A".equals(dto.placa())) {
+                existing = vehicleCacheRepository.findByPlaca(dto.placa());
+            }
+
+            if (existing.isPresent()) {
+                VehicleCache updated = updateExistingVehicle(existing.get(), dto, syncDate);
+                vehicleCacheRepository.save(updated);
+                log.debug("Updated existing vehicle: {}", dto.contrato());
+            } else {
+                VehicleCache newEntity = vehicleCacheMapper.toEntity(dto, syncDate);
+                vehicleCacheRepository.save(newEntity);
+                log.debug("Inserted new vehicle: {}", dto.contrato());
+            }
+        }
+    }
+
+    private VehicleCache updateExistingVehicle(VehicleCache existing, VehicleDTO dto, LocalDateTime syncDate) {
+        existing.setCredor(dto.credor());
+        existing.setDataPedido(dto.dataPedido());
+        existing.setContrato(dto.contrato());
+        existing.setPlaca(dto.placa());
+        existing.setModelo(dto.modelo());
+        existing.setUf(dto.uf());
+        existing.setCidade(dto.cidade());
+        existing.setCpfDevedor(dto.cpfDevedor());
+        existing.setProtocolo(dto.protocolo());
+        existing.setEtapaAtual(dto.etapaAtual());
+        existing.setStatusApreensao(dto.statusApreensao());
+        existing.setUltimaMovimentacao(dto.ultimaMovimentacao());
+        existing.setApiSyncDate(syncDate);
+        return existing;
     }
 
     public Page<VehicleDTO> getFromCache(LocalDate dataInicio, LocalDate dataFim,

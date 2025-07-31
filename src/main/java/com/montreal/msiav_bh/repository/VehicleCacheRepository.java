@@ -13,13 +13,14 @@ import org.springframework.stereotype.Repository;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.Set;
 
 @Repository
 public interface VehicleCacheRepository extends JpaRepository<VehicleCache, Long>, JpaSpecificationExecutor<VehicleCache> {
 
-    Optional<VehicleCache> findByProtocolo(String protocolo);
-
     Optional<VehicleCache> findByContrato(String contrato);
+
+    Optional<VehicleCache> findByProtocolo(String protocolo);
 
     @Query("SELECT v FROM VehicleCache v WHERE v.apiSyncDate = (SELECT MAX(vc.apiSyncDate) FROM VehicleCache vc)")
     Page<VehicleCache> findLatestCachedVehicles(Pageable pageable);
@@ -30,6 +31,15 @@ public interface VehicleCacheRepository extends JpaRepository<VehicleCache, Long
     @Modifying
     @Query("DELETE FROM VehicleCache v WHERE v.apiSyncDate < :cutoffDate")
     void deleteOldCacheEntries(@Param("cutoffDate") LocalDateTime cutoffDate);
+
+    @Modifying
+    @Query("DELETE FROM VehicleCache v WHERE v.placa NOT IN :activePlacas")
+    void deleteByPlacaNotIn(@Param("activePlacas") Set<String> activePlacas);
+
+    @Query("SELECT COUNT(v) FROM VehicleCache v WHERE v.placa NOT IN :activePlacas")
+    int countByPlacaNotIn(@Param("activePlacas") Set<String> activePlacas);
+
+    Optional<VehicleCache> findByPlaca(String placa);
 
     @Query(value = "SELECT * FROM vehicle_cache v " +
             "WHERE (CAST(:dataInicio AS DATE) IS NULL OR v.data_pedido >= CAST(:dataInicio AS DATE)) " +

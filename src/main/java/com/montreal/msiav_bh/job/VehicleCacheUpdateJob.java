@@ -1,5 +1,6 @@
 package com.montreal.msiav_bh.job;
 
+import com.montreal.msiav_bh.context.CacheUpdateContext;
 import com.montreal.msiav_bh.dto.VehicleDTO;
 import com.montreal.msiav_bh.dto.response.ConsultaNotificationResponseDTO;
 import com.montreal.msiav_bh.mapper.VehicleInquiryMapper;
@@ -47,7 +48,10 @@ public class VehicleCacheUpdateJob {
 
             if (notifications != null && !notifications.isEmpty()) {
                 List<VehicleDTO> vehicles = vehicleInquiryMapper.mapToVeiculoDTO(notifications);
-                vehicleCacheService.updateCache(vehicles);
+
+                CacheUpdateContext context = CacheUpdateContext.scheduledRefresh(startDate, endDate);
+                vehicleCacheService.updateCache(vehicles, context);
+
                 log.info("Successfully updated cache with {} vehicles", vehicles.size());
             } else {
                 log.warn("No vehicles found in API response for cache update");

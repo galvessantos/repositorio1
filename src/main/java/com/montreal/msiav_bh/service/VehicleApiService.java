@@ -1,5 +1,6 @@
 package com.montreal.msiav_bh.service;
 
+import com.montreal.msiav_bh.context.CacheUpdateContext;
 import com.montreal.msiav_bh.dto.PageDTO;
 import com.montreal.msiav_bh.dto.VehicleDTO;
 import com.montreal.msiav_bh.dto.response.ConsultaNotificationResponseDTO;
@@ -45,9 +46,30 @@ public class VehicleApiService {
                         uf, cidade, modelo, placa, etapaAtual, statusApreensao,
                         page, size, sortBy, sortDir)
         );
+
         try {
             PageDTO<VehicleDTO> result = future.get(API_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            CompletableFuture.runAsync(() -> vehicleCacheService.updateCache(result.content()));
+
+            CompletableFuture.runAsync(() -> {
+                boolean hasSpecificFilters = credor != null || contrato != null || protocolo != null ||
+                        cpf != null || uf != null || cidade != null ||
+                        modelo != null || placa != null || etapaAtual != null ||
+                        statusApreensao != null;
+
+                boolean hasCustomDateRange = false;
+                if (dataInicio != null && dataFim != null) {
+                    LocalDate defaultStart = LocalDate.now().minusDays(30);
+                    LocalDate defaultEnd = LocalDate.now();
+                    hasCustomDateRange = !dataInicio.equals(defaultStart) || !dataFim.equals(defaultEnd);
+                }
+
+                CacheUpdateContext context = (hasSpecificFilters || hasCustomDateRange)
+                        ? CacheUpdateContext.filteredSearch(dataInicio, dataFim, credor, contrato, protocolo, cpf, uf, cidade, modelo, placa, etapaAtual, statusApreensao)
+                        : CacheUpdateContext.fullRefresh();
+
+                vehicleCacheService.updateCache(result.content(), context);
+            });
+
             return result;
         } catch (Exception e) {
             throw new RuntimeException("API call failed", e);
@@ -67,6 +89,11 @@ public class VehicleApiService {
 
         log.warn("API externa falhou, usando cache como fallback. Erro: {}", throwable.getMessage());
 
+        if (!vehicleCacheService.isCacheValid()) {
+            log.error("Cache is empty or invalid - cannot provide fallback");
+            return PageDTO.of(List.of(), page, size, 0);
+        }
+
         Sort.Direction direction = "desc".equalsIgnoreCase(sortDir) ? Sort.Direction.DESC : Sort.Direction.ASC;
         Pageable pageable = PageRequest.of(page, size, Sort.by(direction, "id"));
 
@@ -74,6 +101,8 @@ public class VehicleApiService {
                 dataInicio, dataFim, credor, contrato, protocolo, cpf,
                 uf, cidade, modelo, placa, etapaAtual, statusApreensao, pageable
         );
+
+        log.info("Fallback returned {} results from cache", cached.getTotalElements());
 
         return PageDTO.of(
                 cached.getContent(),
@@ -89,10 +118,16 @@ public class VehicleApiService {
             String placa, String etapaAtual, String statusApreensao,
             int page, int size, String sortBy, String sortDir) {
 
+        LocalDate searchStart = dataInicio;
+        LocalDate searchEnd = dataFim;
+
+        if (dataInicio == null || dataFim == null) {
+            searchStart = LocalDate.now().minusDays(30);
+            searchEnd = LocalDate.now();
+        }
+
         List<ConsultaNotificationResponseDTO.NotificationData> notifications =
-                (dataInicio != null && dataFim != null)
-                        ? apiQueryService.searchByPeriod(dataInicio, dataFim)
-                        : apiQueryService.searchByPeriod(LocalDate.now().minusDays(30), LocalDate.now());
+                apiQueryService.searchByPeriod(searchStart, searchEnd);
 
         List<VehicleDTO> vehicles = vehicleInquiryMapper.mapToVeiculoDTO(notifications);
         vehicles = vehicles.stream()
@@ -108,12 +143,7 @@ public class VehicleApiService {
                 .filter(v -> statusApreensao == null || v.statusApreensao().equals(statusApreensao))
                 .toList();
 
-        vehicles = sort(vehicles, sortBy, sortDir);
         return paginate(vehicles, page, size);
-    }
-
-    private List<VehicleDTO> sort(List<VehicleDTO> vehicles, String sortBy, String sortDir) {
-        return vehicles;
     }
 
     private PageDTO<VehicleDTO> paginate(List<VehicleDTO> vehicles, int page, int size) {
@@ -127,5 +157,13 @@ public class VehicleApiService {
 
     public QueryDetailResponseDTO searchContract(String contrato) {
         return apiQueryService.searchContract(contrato);
+    }
+
+    private boolean isDefaultDateRange(LocalDate dataInicio, LocalDate dataFim) {
+        LocalDate defaultStart = LocalDate.now().minusDays(30);
+        LocalDate defaultEnd = LocalDate.now();
+
+        return dataInicio.equals(defaultStart) &&
+                (dataFim.equals(defaultEnd) || dataFim.equals(defaultEnd.minusDays(1)));
     }
 }
